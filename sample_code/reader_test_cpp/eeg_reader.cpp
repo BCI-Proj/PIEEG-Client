@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <ostream>
+#include <iostream>
 #include "spi.h"
 #include "gpio.h"
 #include <unistd.h>
 
-// c-periphery : 
+// SETUP -> c-periphery : 
 
 //  git clone https://github.com/vsergeev/c-periphery.git
 //  cd c-periphery/
@@ -14,10 +16,10 @@
 //  cmake ..
 //  make
 
-// Compile
+// SETUP -> Compile
 
+// cd ../../
 // g++ -I./c-periphery/src eeg_reader.cpp ./c-periphery/build/libperiphery.a -o reader
-// g++ -I./c-periphery/src -L./c-periphery/build -lperiphery eeg_reader.cpp -o read_data
 
 // Function to write to a register
 void write_reg(spi_t *spi, uint8_t reg_address, uint8_t val_hex) {
@@ -48,17 +50,17 @@ int main(void) {
 
     write_reg(spi, 0x14, 0x80); // LED
     write_reg(spi, 0x05, 0x00); // CH1
-    write_reg(spi, 0x06, 0x01); // CH2
-    write_reg(spi, 0x07, 0x01); // CH3
-    write_reg(spi, 0x08, 0x01); // CH4
-    write_reg(spi, 0x09, 0x01); // CH5
-    write_reg(spi, 0x0A, 0x01); // CH6
-    write_reg(spi, 0x0B, 0x01); // CH7
-    write_reg(spi, 0x0C, 0x01); // CH8
+    write_reg(spi, 0x06, 0x00); // CH2
+    write_reg(spi, 0x07, 0x00); // CH3
+    write_reg(spi, 0x08, 0x00); // CH4
+    write_reg(spi, 0x09, 0x00); // CH5
+    write_reg(spi, 0x0A, 0x00); // CH6
+    write_reg(spi, 0x0B, 0x00); // CH7
+    write_reg(spi, 0x0C, 0x00); // CH8
     write_reg(spi, 0x15, 0x20); // MICS
     write_reg(spi, 0x01, 0x96); // REG1
     write_reg(spi, 0x02, 0xD4); // REG2
-    write_reg(spi, 0x03, 0xE0); // REG3
+    write_reg(spi, 0x03, 0xFF); // REG3
 
     send_command(spi, 0x10); // SDATC
     send_command(spi, 0x08); // START
@@ -75,13 +77,17 @@ int main(void) {
     FILE *file = fopen("data.txt", "w");
     fprintf(file, "ch1 ch2 ch3 ch4 ch5 ch6 ch7 ch8\n");
 
+    int flag_counter = 0;
     while (1) {
         usleep(100);
         int gpio_res = gpio_poll(gpio_in, timeout_ms);
+        flag_counter++;
+
         if (gpio_res == 1) {
             gpio_edge_t edge = GPIO_EDGE_NONE;
             gpio_res = gpio_read_event(gpio_in, &edge, NULL);
             spi_transfer(spi, zero27, buf, 27);
+
 
             for (int i = 1; i < 9; i++) {
                 int offset = 3 * i;
@@ -93,7 +99,16 @@ int main(void) {
                 }
 
                 package[i - 1] = 0.27 * voltage; // (4.5*1000000/16777214) = 0.27
+
+                if (flag_counter == 25) {
+                    std::cout << package[i - 1] << " ";
+                }
                 fprintf(file, "%.1f ", package[i - 1]);
+            }
+
+            if (flag_counter == 25) {
+                flag_counter = 0;
+                std::cout << std::endl;
             }
             fprintf(file, "\n");
         } else {
